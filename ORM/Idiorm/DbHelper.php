@@ -3,7 +3,6 @@
 namespace Warcry\ORM\Idiorm;
 
 use Warcry\Util\Util;
-
 use Warcry\Exceptions\IApiException;
 use Warcry\Exceptions\NotFoundException;
 use Warcry\Exceptions\ValidationException;
@@ -66,25 +65,9 @@ class DbHelper extends Helper {
 
 		return $response->withJson($result);
 	}
-	
-	public function jsonOne($response, $e) {
-		try {
-			if ($e) {
-				$response = $this->json($response, $e);
-			}
-			else {
-	            throw new NotFoundException;
-			}
-		}
-		catch (\Exception $ex) {
-			$response = $this->error($response, $ex);
-		}
-		
-		return $response;
-	}
 
 	public function error($response, $ex) {
-		$status = 500;
+		$status = 400;
 
 		if ($ex instanceof IApiException) {
 			$status = $ex->GetErrorCode();
@@ -110,7 +93,7 @@ class DbHelper extends Helper {
 			$this->logger->info("Error: {$msg}");
 		}
 	
-		$error = [ 'error' => true, 'message' => $msg, 'format' => 'plain' ];
+		$error = [ 'error' => true, 'message' => $msg ];
 		
 		if ($errors) {
 			$error['errors'] = $errors;
@@ -118,16 +101,18 @@ class DbHelper extends Helper {
 		
 		return $this->json($response, $error)->withStatus($status);
 	}
+	
+	protected function filterBy($items, $field, $args) {
+		return $items->where($field, $args['id']);
+	}
 
-	public function getMany($table, $options = []) {
-		$exclude = isset($options['exclude'])
-			? $options['exclude']
-			: null;
+	public function getMany($table, $provider, $options = []) {
+		$exclude = $options['exclude'] ?? null;
 
 		$items = $this->selectMany($table, $exclude);
 		
 		if (isset($options['filter'])) {
-			$items = $options['filter']($items, $options['args']);
+			$items = $this->filterBy($items, $options['filter'], $options['args']);
 		}
 
 		$settings = $this->tables[$table];
@@ -141,145 +126,130 @@ class DbHelper extends Helper {
 		}
 		
 		$array = $items->findArray();
-
-		if (isset($options['mutator'])) {
-			$array = array_map($options['mutator'], $array);
-		}
+		
+		$array = array_map(array($provider, 'afterLoad'), $array);
 
 		return array_values($array);
 	}
 
-	public function jsonMany($response, $table, $options = []) {
-		$items = $this->getMany($table, $options);
-		return $this->json($response, $items, $options);
+	public function jsonMany($response, $table, $provider, $options = []) {
+		if (!$this->can($table, 'api_read')) {
+			$this->logger->info("Unauthorized read attempt on {$table}");
+
+			throw new AuthorizationException;
+		}
+		
+		$items = $this->getMany($table, $provider, $options);
+		$response = $this->json($response, $items, $options);
+
+		return $response;
 	}
 
-	public function get($response, $table, $id) {
-		$e = $this->selectMany($table)
-			->findOne($id);
+	public function get($response, $table, $id, $provider) {
+		$e = $this->selectMany($table)->findOne($id);
 
-		if (!$this->can($table, 'read', $e)) {
+		if (!$e) {
+            throw new NotFoundException;
+		}
+
+		if (!$this->can($table, 'api_read', $e)) {
 			$this->logger->info("Unauthorized read attempt on {$table}: {$e->id}");
 
 			throw new AuthorizationException;
 		}
-			
-		return $this->jsonOne($response, $e);
+		
+		$e = $provider->afterLoad($e);
+
+		return $this->json($response, $e);
 	}
 
-	protected function beforeSave($request, $table, $data, $id = null) {
+	protected function beforeValidate($request, $table, $data, $id = null) {
 		return $data;
 	}
-	
-	public function create($request, $response, $table, $options) {
-		try {
-			if (!$this->can($table, 'create')) {
-				$this->logger->info("Unauthorized create attempt on {$table}");
 
-				throw new AuthorizationException;
-			}
+	public function create($request, $response, $table, $provider) {
+		if (!$this->can($table, 'create')) {
+			$this->logger->info("Unauthorized create attempt on {$table}");
 
-			$original = $request->getParsedBody();
-			$data = $this->beforeSave($request, $table, $original);
-			
-			if (isset($options['before_save'])) {
-				$data = $options['before_save']($this->container, $data, null);
-			}
-			
-			$e = $this->forTable($table)->create();
-			$e->set($data);
-			$e->save();
-			
-			if (isset($options['after_save'])) {
-				$options['after_save']($this->container, $e, $original);
-			}
-			
-			$this->logger->info("Created {$table}: {$e->id}");
-			
-			$response = $this->get($response, $table, $e->id)->withStatus(201);
+			throw new AuthorizationException;
 		}
-		catch (\Exception $ex) {
-			$response = $this->error($response, $ex);
-		}
+
+		$original = $request->getParsedBody();
+		$data = $this->beforeValidate($request, $table, $original);
 		
+		$provider->validate($request, $data);
+		
+		$data = $provider->beforeSave($data);
+
+		$e = $this->forTable($table)->create();
+		
+		$e->set($data);
+		$e->save();
+		
+		$provider->afterSave($e, $original);
+
+		$this->logger->info("Created {$table}: {$e->id}");
+		
+		return $this->get($response, $table, $e->id, $provider)->withStatus(201);
+	}
+	
+	public function update($request, $response, $table, $id, $provider) {
+		$e = $this->forTable($table)->findOne($id);
+
+		if (!$e) {
+            throw new NotFoundException;
+		}
+
+		if (!$this->can($table, 'edit', $e)) {
+			$this->logger->info("Unauthorized edit attempt on {$table}: {$e->id}");
+
+			throw new AuthorizationException;
+		}
+
+		$original = $request->getParsedBody();
+		$data = $this->beforeValidate($request, $table, $original, $id);
+
+		$provider->validate($request, $data, $id);
+		
+		$data = $provider->beforeSave($data, $id);
+
+		$e->set($data);
+		$e->save();
+		
+		$provider->afterSave($e, $original);
+		
+		$this->logger->info("Updated {$table}: {$e->id}");
+		
+		$response = $this->get($response, $table, $e->id, $provider);
+
 		return $response;
 	}
 	
-	public function update($request, $response, $table, $id, $options) {
-		try {
-			$original = $request->getParsedBody();
-			$data = $this->beforeSave($request, $table, $original, $id);
-
-			if (isset($options['before_save'])) {
-				$data = $options['before_save']($this->container, $data, $id);
-			}
-	
-			$e = $this->forTable($table)->findOne($id);
-
-			if ($e) {
-				if (!$this->can($table, 'edit', $e)) {
-					$this->logger->info("Unauthorized edit attempt on {$table}: {$e->id}");
-
-					throw new AuthorizationException;
-				}
-				else {
-					$e->set($data);
-					$e->save();
-					
-					if (isset($options['after_save'])) {
-						$options['after_save']($this->container, $e, $original);
-					}
-					
-					$this->logger->info("Updated {$table}: {$e->id}");
-					
-					$response = $this->get($response, $table, $e->id);
-				}
-			}
-			else {
-	            throw new NotFoundException;
-			}
-		}
-		catch (\Exception $ex) {
-			$response = $this->error($response, $ex);
-		}
+	public function delete($response, $table, $id, $provider) {
+		$e = $this->forTable($table)->findOne($id);
 		
+		if (!$e) {
+            throw new NotFoundException;
+		}
+
+		if (!$this->can($table, 'delete', $e)) {
+			$this->logger->info("Unauthorized delete attempt on {$table}: {$e->id}");
+
+			throw new AuthorizationException;
+		}
+
+		$e->delete();
+		
+		$provider->afterDelete($e);
+
+		$this->logger->info("Deleted {$table}: {$e->id}");
+		
+		$response = $response->withStatus(204);
+
 		return $response;
 	}
 	
-	public function delete($response, $table, $id, $options) {
-		try {
-			$e = $this->forTable($table)->findOne($id);
-			
-			if ($e) {
-				if (!$this->can($table, 'delete', $e)) {
-					$this->logger->info("Unauthorized delete attempt on {$table}: {$e->id}");
-
-					throw new AuthorizationException;
-				}
-				else {
-					$e->delete();
-					
-					if (isset($options['after_delete'])) {
-						$options['after_delete']($this->container, $e);
-					}
-					
-					$this->logger->info("Deleted {$table}: {$e->id}");
-					
-					$response = $response->withStatus(204);
-				}
-			}
-			else {
-	            throw new NotFoundException;
-			}
-		}
-		catch (\Exception $ex) {
-			$response = $this->error($response, $ex);
-		}
-		
-		return $response;
-	}
-	
-	public function crud($app, $alias, $access = null, $options = []) {
+	/*public function crud($app, $alias, $access = null, $options = []) {
 		$table = $alias;
 		
 		$get = $app->get('/'.$alias.'/{id:\d+}', function ($request, $response, $args) use ($table) {
@@ -304,7 +274,7 @@ class DbHelper extends Helper {
 			$put->add($access($table, 'api_edit'));
 			$delete->add($access($table, 'api_delete'));
 		}
-	}
+	}*/
 	
 	public function getEntityById($table, $id) {
 		$path = "data.{$table}.{$id}";

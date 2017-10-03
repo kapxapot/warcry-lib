@@ -8,19 +8,23 @@ class Image {
 	public $data;
 	public $imgType;
 	
-	public function parseBase64($base64) {
+	static public function parseBase64($base64) {
+		$img = new Image();
+		
 		if (preg_match("#^data:image/(\w+);base64,(.*)$#i", $base64, $matches)) {
 			$imgType = $matches[1];
 			$data = $matches[2];
 
 			if (strlen($data) > 0) {
-				$this->data = base64_decode($data);
-				$this->imgType = $imgType;
+				$img->data = base64_decode($data);
+				$img->imgType = $imgType;
 			}
 			/*else {
 				throw \InvalidArgumentException('Изображение отсутствует.');
 			}*/
 		}
+		
+		return $img;
 	}
 
 	public function notEmpty() {
@@ -29,8 +33,7 @@ class Image {
 	
 	public function save($fileName) {
 		if ($this->notEmpty()) {
-			$file = new File();
-			$file->save($fileName, $this->data);
+			File::save($fileName, $this->data);
 		}
 		else {
 			throw new ApplicationException('Отсутствуют данные для сохранения.');

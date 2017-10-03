@@ -2,8 +2,10 @@
 
 namespace Warcry;
 
+use Illuminate\Support\Arr;
+
 class Contained {
-	protected $container;
+	public $container;
 
 	public function __construct($container) {
 		$this->container = $container;
@@ -15,8 +17,13 @@ class Contained {
 		}
 	}
 	
-	public function getSettings($module = null) {
-		$s = $this->container->get('settings');
-		return $module ? $s[$module] : $s;
+	public function getSettings($path = null) {
+		$result = $this->container->get('settings');
+		
+		if ($path) {
+			$result = Arr::get($result, $path);
+		}
+		
+		return $result;
 	}
 }

@@ -28,4 +28,8 @@ class Util {
 	static public function generateExpirationTime($minutes = 60) {
 		return date(self::DATE_FORMAT, strtotime("+{$minutes} minutes"));
 	}
+	
+	static public function toPascalCase($str) {
+		return str_replace('_', '', ucwords($str, '_'));
+	}
 }
