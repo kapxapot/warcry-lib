@@ -106,7 +106,7 @@ class DbHelper extends Helper {
 		return $items->where($field, $args['id']);
 	}
 
-	public function getMany($table, $provider, $options = []) {
+	public function apiGetMany($table, $provider, $options = []) {
 		$exclude = $options['exclude'] ?? null;
 
 		$items = $this->selectMany($table, $exclude);
@@ -139,13 +139,13 @@ class DbHelper extends Helper {
 			throw new AuthorizationException;
 		}
 		
-		$items = $this->getMany($table, $provider, $options);
+		$items = $this->apiGetMany($table, $provider, $options);
 		$response = $this->json($response, $items, $options);
 
 		return $response;
 	}
 
-	public function get($response, $table, $id, $provider) {
+	public function apiGet($response, $table, $id, $provider) {
 		$e = $this->selectMany($table)->findOne($id);
 
 		if (!$e) {
@@ -167,7 +167,7 @@ class DbHelper extends Helper {
 		return $data;
 	}
 
-	public function create($request, $response, $table, $provider) {
+	public function apiCreate($request, $response, $table, $provider) {
 		if (!$this->can($table, 'create')) {
 			$this->logger->info("Unauthorized create attempt on {$table}");
 
@@ -190,10 +190,10 @@ class DbHelper extends Helper {
 
 		$this->logger->info("Created {$table}: {$e->id}");
 		
-		return $this->get($response, $table, $e->id, $provider)->withStatus(201);
+		return $this->apiGet($response, $table, $e->id, $provider)->withStatus(201);
 	}
 	
-	public function update($request, $response, $table, $id, $provider) {
+	public function apiUpdate($request, $response, $table, $id, $provider) {
 		$e = $this->forTable($table)->findOne($id);
 
 		if (!$e) {
@@ -220,12 +220,12 @@ class DbHelper extends Helper {
 		
 		$this->logger->info("Updated {$table}: {$e->id}");
 		
-		$response = $this->get($response, $table, $e->id, $provider);
+		$response = $this->apiGet($response, $table, $e->id, $provider);
 
 		return $response;
 	}
 	
-	public function delete($response, $table, $id, $provider) {
+	public function apiDelete($response, $table, $id, $provider) {
 		$e = $this->forTable($table)->findOne($id);
 		
 		if (!$e) {
@@ -248,34 +248,7 @@ class DbHelper extends Helper {
 
 		return $response;
 	}
-	
-	/*public function crud($app, $alias, $access = null, $options = []) {
-		$table = $alias;
-		
-		$get = $app->get('/'.$alias.'/{id:\d+}', function ($request, $response, $args) use ($table) {
-			return $this->db->get($response, $table, $args['id']);
-		});
-		
-		$post = $app->post('/'.$alias, function ($request, $response, $args) use ($table, $options) {
-			return $this->db->create($request, $response, $table, $options);
-		});
-		
-		$put = $app->put('/'.$alias.'/{id:\d+}', function ($request, $response, $args) use ($table, $options) {
-			return $this->db->update($request, $response, $table, $args['id'], $options);
-		});
-		
-		$delete = $app->delete('/'.$alias.'/{id:\d+}', function ($request, $response, $args) use ($table, $options) {
-			return $this->db->delete($response, $table, $args['id'], $options);
-		});
-		
-		if ($access) {
-			$get->add($access($table, 'api_read'));
-			$post->add($access($table, 'api_create'));
-			$put->add($access($table, 'api_edit'));
-			$delete->add($access($table, 'api_delete'));
-		}
-	}*/
-	
+
 	public function getEntityById($table, $id) {
 		$path = "data.{$table}.{$id}";
 		$value = $this->cache->get($path);

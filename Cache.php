@@ -15,7 +15,7 @@ class Cache extends Contained {
 		/*$value = null;
 		$chunks = explode('.', $path);
 		while (count($))*/
-		return isset($this->cache[$path]) ? $this->cache[$path] : null;
+		return $this->cache[$path] ?? null;
 	}
 	
 	public function set($path, $value) {
