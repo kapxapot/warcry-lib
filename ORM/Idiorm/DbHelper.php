@@ -21,8 +21,14 @@ class DbHelper extends Helper {
 		return true;
 	}
 	
+	protected function getTableName($table) {
+		return $this->tables[$table]['table'];
+	}
+	
 	public function forTable($table) {
-		return \ORM::forTable($this->tables[$table]['table']);
+		$tableName = $this->getTableName($table);
+		
+		return \ORM::forTable($tableName);
 	}
 	
 	public function fields($table) {

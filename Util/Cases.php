@@ -4,7 +4,7 @@ namespace Warcry\Util;
 
 use Warcry\Contained;
 
-class Cases extends Contained {
+class Cases {
 	const NOM = 1; // именительный падеж
 	const GEN = 2; // родительный падеж
 	const DAT = 3; // дательный падеж

@@ -9,7 +9,7 @@ class Image {
 	public $imgType;
 	
 	static public function parseBase64($base64) {
-		$img = new Image();
+		$img = new Image;
 		
 		if (preg_match("#^data:image/(\w+);base64,(.*)$#i", $base64, $matches)) {
 			$imgType = $matches[1];
@@ -22,6 +22,19 @@ class Image {
 			/*else {
 				throw \InvalidArgumentException('Изображение отсутствует.');
 			}*/
+		}
+		
+		return $img;
+	}
+	
+	static public function load($fileName, $imgType) {
+		$img = new Image;
+		$img->imgType = $imgType;
+		
+		try {
+			$img->data = File::load($fileName);
+		}
+		catch (\Exception $e) {
 		}
 		
 		return $img;

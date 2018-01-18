@@ -20,7 +20,7 @@ class Sort {
 		usort($array, function($a, $b) use ($sorts) {
 		    foreach ($sorts as $field => $settings) {
 		    	$dir = $settings['dir'];
-		    	$str = (isset($settings['type']) && $settings['type'] == 'string');
+		    	$str = ($settings['type'] ?? '') == 'string';
 		    	
 		    	$cmp = $str ? strcasecmp($a[$field], $b[$field]) : ($a[$field] - $b[$field]);
 		    	
@@ -29,7 +29,7 @@ class Sort {
 			    		$cmp = -$cmp;
 			    	}
 			    	
-			    	return $cmp;
+			    	return ($cmp > 0) ? 1 : -1;
 		    	}
 		    }
 		    
