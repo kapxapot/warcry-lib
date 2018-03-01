@@ -2,7 +2,7 @@
 
 namespace Warcry\Validation\Rules;
 
-use Warcry\Util\Util;
+use Warcry\Util\Security;
 
 class MatchesPassword extends ContainerRule {
 	protected $password;
@@ -12,6 +12,6 @@ class MatchesPassword extends ContainerRule {
 	}
 	
 	public function validate($input) {
-		return Util::verifyPassword($input, $this->password);
+		return Security::verifyPassword($input, $this->password);
 	}
 }

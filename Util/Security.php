@@ -18,8 +18,4 @@ class Security {
 	static public function generateToken() {
 		return bin2hex(openssl_random_pseudo_bytes(16));
 	}
-	
-	static public function generateExpirationTime($minutes = 60) {
-		return date(self::DATE_FORMAT, strtotime("+{$minutes} minutes"));
-	}
 }
