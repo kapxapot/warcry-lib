@@ -1,3 +1,5 @@
 # Warcry.ru / PHP Library
 
-Helper PHP library for other projects.
+[Old] Helper PHP library for other projects.
+
+Warcry.ru moved to Plasticode.
